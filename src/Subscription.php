@@ -3,8 +3,10 @@
 namespace Laravel\Cashier;
 
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
+use InvalidArgumentException;
 use Laravel\Cashier\Exceptions\IncompletePayment;
 use Laravel\Cashier\Exceptions\SubscriptionUpdateFailure;
 use LogicException;
@@ -395,6 +397,18 @@ class Subscription extends Model
     }
 
     /**
+     * Indicate that the plan change should be prorated.
+     *
+     * @return $this
+     */
+    public function prorate()
+    {
+        $this->prorate = true;
+
+        return $this;
+    }
+
+    /**
      * Change the billing cycle anchor on a plan change.
      *
      * @param  \DateTimeInterface|int|string  $date
@@ -421,6 +435,31 @@ class Subscription extends Model
     public function skipTrial()
     {
         $this->trial_ends_at = null;
+
+        return $this;
+    }
+
+    /**
+     * Extend an existing subscription's trial period.
+     *
+     * @param  \Carbon\CarbonInterface  $date
+     * @return $this
+     */
+    public function extendTrial(CarbonInterface $date)
+    {
+        if (! $date->isFuture()) {
+            throw new InvalidArgumentException("Extending a subscription's trial requires a date in the future.");
+        }
+
+        $subscription = $this->asStripeSubscription();
+
+        $subscription->trial_end = $date->getTimestamp();
+
+        $subscription->save();
+
+        $this->trial_ends_at = $date;
+
+        $this->save();
 
         return $this;
     }
